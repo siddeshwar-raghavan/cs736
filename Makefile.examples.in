@@ -1,0 +1,254 @@
+#/****************************************************************************
+# * Copyright © 2003-2012 Dorian C. Arnold, Philip C. Roth, Barton P. Miller *
+# *                  Detailed MRNet usage rights in "LICENSE" file.          *
+# ****************************************************************************/
+
+MRNET_ROOT     = @MRNET_ROOT@
+MRNET_PLATFORM = @host@
+MRNET_STARTUP_METHOD = @MRNET_STARTUP_METHOD@
+LIBIMETHOD = @LIBI_STARTUP_METHOD@
+
+@SET_MAKE@
+
+#############################
+####  BUILD DIRECTORIES  ####
+#############################
+PLATDIR = @PLATFORM_BUILD@
+BINDIR  = $(PLATDIR)/bin
+LIBDIR  = $(PLATDIR)/lib
+OBJDIR  = $(PLATDIR)/obj
+EXTDIR  = $(MRNET_ROOT)/external
+
+#############################
+#### INSTALL DIRECTORIES ####
+#############################
+prefix = ${DESTDIR}/@prefix@
+exec_prefix = @exec_prefix@
+IBINDIR = @bindir@
+ILIBDIR = @libdir@
+IINCDIR = @includedir@
+
+############################
+#### AUXILIARY PROGRAMS ####
+############################
+CP      = @CP@
+RM      = @RM@
+
+# install actually used by subdir makes, set correct path if using our install-sh
+TMP_INSTALL = @INSTALL@
+INSTALL_PROG = $(shell echo $(TMP_INSTALL) | sed 's/ .*$$//')
+ifeq "$(INSTALL_PROG)" "../conf/install-sh"
+    INSTALL := ../$(TMP_INSTALL)
+else
+    INSTALL := $(TMP_INSTALL)
+endif
+
+#############################
+#### General Definitions ####
+#############################
+
+WANT_THREADSAFE_LTWT = @LTWT_THREADSAFE@
+
+# libs
+LIBIDIR				 = @LIBI_IDIR@
+LMONDIR              = @LMON_IDIR@
+
+LIBMRNET             = -lmrnet
+LIBXPLAT             = -lxplat
+LIBMRNET_LIGHTWEIGHT = -lmrnet_lightweight
+LIBMRNET_LOWFAT      = -lmrnet_lightweight_r
+LIBXPLAT_LIGHTWEIGHT = -lxplat_lightweight
+LIBXPLAT_LOWFAT      = -lxplat_lightweight_r
+
+LDFLAGS = @LDFLAGS@
+SOFLAGS = @SOFLAGS@
+LIBLIBI = -L$(LIBIDIR) -llibi
+ifeq ($(LIBIMETHOD),slurm)
+    LIBLIBI += -L$(LMONDIR)/lib -lmonfeapi -lmonmwapi -lmonbeapi -lrt
+endif
+
+LIBS                 = -L$(LIBDIR) $(LIBMRNET)
+ifeq ($(MRNET_STARTUP_METHOD), libi)
+    LIBS             += $(LIBLIBI)
+endif
+LIBS                 += $(LIBXPLAT) @LIBS@ @EXTRA_LIBS@
+LIBS_LIGHTWEIGHT     = -L$(LIBDIR) $(LIBMRNET_LIGHTWEIGHT) $(LIBXPLAT_LIGHTWEIGHT) @LIBS_LIGHTWEIGHT@ @EXTRA_LIBS_LIGHTWEIGHT@
+LIBS_LOWFAT          = -L$(LIBDIR) $(LIBMRNET_LOWFAT) $(LIBXPLAT_LOWFAT) @LIBS_LOWFAT@ @EXTRA_LIBS_LOWFAT@
+
+# includes
+INCDIRS = -I$(MRNET_ROOT)/include -I$(MRNET_ROOT)/xplat/include -I$(PLATDIR)
+INCDIRS_LIGHTWEIGHT = $(INCDIRS)
+
+# Boost
+HAVE_BOOST = @HAVE_BOOST@
+ifeq ($(HAVE_BOOST), no)
+    INCDIRS += -I$(EXTDIR)/boost/include
+endif
+
+#####################################
+#### System Specific Definitions ####
+#####################################
+
+COMPILER_TYPE = @COMPILER_TYPE@
+ifeq ($(COMPILER_TYPE), gnu)
+    WARNFLAGS = -Wall \
+                -Wno-system-headers \
+                -Wfloat-equal \
+                -Wconversion \
+                -Wshadow \
+                -Wpointer-arith \
+                -Wcast-qual \
+                -Wcast-align \
+                -Wwrite-strings \
+                -Wsign-compare \
+                -Wredundant-decls \
+                -Wlong-long
+endif # GCC options
+
+ifeq ($(COMPILER_TYPE), intel)
+    WARNFLAGS = -w2
+endif # Intel options
+
+#ifeq ($(COMPILER_TYPE), forte)
+#    WARNFLAGS =
+#endif # Sun Forte options
+
+CXX = @CXX@
+CC = @CC@
+CXXFLAGS = @CXXFLAGS@ $(INCDIRS) $(WARNFLAGS)
+CCFLAGS = @CFLAGS@ $(INCDIRS_LIGHTWEIGHT) $(WARNFLAGS_LIGHTWEIGHT)
+
+export
+
+############################
+#### Target Definitions ####
+############################
+
+@VERBOSEMAKE@
+
+TARGETS = backend-attach integer-add word-count perf-data hetero-filter fault-recovery per-thread-streams
+
+default: all
+
+EX_DIR = $(MRNET_ROOT)/Examples
+BA_DIR = $(EX_DIR)/NoBackEndInstantiation
+IA_DIR = $(EX_DIR)/IntegerAddition
+WC_DIR = $(EX_DIR)/WordCount
+HF_DIR = $(EX_DIR)/HeterogeneousFilters
+PD_DIR = $(EX_DIR)/PerformanceData
+FR_DIR = $(EX_DIR)/FaultRecovery
+PTS_DIR = $(EX_DIR)/PerThreadStreams
+
+.PHONY: all clean install \
+        backend-attach backend-attach-clean backend-attach-install \
+        integer-add integer-add-clean integer-add-install \
+        word-count word-count-clean word-count-install \
+        hetero-filter hetero-filter-clean hetero-filter-install \
+        perf-data perf-data-clean perf-data-install \
+        fault-recovery fault-recovery-clean fault-recovery-install \
+        per-thread-streams per-thread-streams-clean per-thread-streams-install
+
+all: $(TARGETS)
+
+# Back-end Attach Example
+backend-attach:
+	@echo Building Backend Attach Example
+	$(MAKE) -C $(BA_DIR)
+
+backend-attach-mpi: backend-attach
+	@echo Building Backend Attach MPI Example
+	$(MAKE) -C $(BA_DIR) mpi
+
+backend-attach-clean:
+	@echo Cleaning Backend Attach Example
+	$(MAKE) -C $(BA_DIR) clean
+
+backend-attach-install:
+	@echo Installing Backend Attach Example
+	$(MAKE) -C $(BA_DIR) install
+
+# Integer Addition Example
+integer-add:
+	@echo Building Integer Addition Example
+	$(MAKE) -C $(IA_DIR)
+
+integer-add-clean:
+	@echo Cleaning Integer Addition Example
+	$(MAKE) -C $(IA_DIR) clean
+
+integer-add-install:
+	@echo Installing Integer Addition Example
+	$(MAKE) -C $(IA_DIR) install
+
+# Word Count Example
+word-count:
+	@echo Building Word Count Example
+	$(MAKE) -C $(WC_DIR)
+
+word-count-clean:
+	@echo Cleaning Word Count Example
+	$(MAKE) -C $(WC_DIR) clean
+
+word-count-install:
+	@echo Installing Word Count Example
+	$(MAKE) -C $(WC_DIR) install
+
+# Heterogeneous Filters Example
+hetero-filter:
+	@echo Building Heterogeneous Filters Example
+	$(MAKE) -C $(HF_DIR)
+
+hetero-filter-clean:
+	@echo Cleaning Heterogeneous Filters Example
+	$(MAKE) -C $(HF_DIR) clean
+
+hetero-filter-install:
+	@echo Installing Heterogeneous Filters Example
+	$(MAKE) -C $(HF_DIR) install
+
+# Performance Data Collection Example
+perf-data:
+	@echo Building Performance Data Collection Example
+	$(MAKE) -C $(PD_DIR)
+
+perf-data-clean:
+	@echo Cleaning Performance Data Collection Example
+	$(MAKE) -C $(PD_DIR) clean
+
+perf-data-install:
+	@echo Installing Performance Data Collection Example
+	$(MAKE) -C $(PD_DIR) install
+
+# Fault Tolerant Filter Example
+fault-recovery:
+	@echo Building Fault Recovery Example
+	$(MAKE) -C $(FR_DIR)
+
+fault-recovery-clean:
+	@echo Cleaning Fault Recovery Example
+	$(MAKE) -C $(FR_DIR) clean
+
+fault-recovery-install:
+	@echo Installing Fault Recovery Example
+	$(MAKE) -C $(FR_DIR) install
+
+# Per-Thread Streams Example
+per-thread-streams:
+	@echo Building Per-Thread Streams Example
+	$(MAKE) -C $(PTS_DIR)
+
+per-thread-streams-clean:
+	@echo Cleaning Per-Thread Streams Example
+	$(MAKE) -C $(PTS_DIR) clean
+
+per-thread-streams-install:
+	@echo Installing Per-Thread Streams Example
+	$(MAKE) -C $(PTS_DIR) install
+
+# Clean rules
+clean: backend-attach-clean integer-add-clean word-count-clean hetero-filter-clean \
+       perf-data-clean fault-recovery-clean per-thread-streams-clean
+
+# Install rules
+install: backend-attach-install integer-add-install word-count-install hetero-filter-install \
+         perf-data-install fault-recovery-install per-thread-streams-install
