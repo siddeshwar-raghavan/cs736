@@ -15,7 +15,7 @@ Add folder `WordCount/` in this repo to `Examples/`.
 ### Compile Source Code
 
 ```
-./configure CC=gcc CXX=g++ --enable-verbosebuild --with-boost=/usr/include/boost
+./configure CC=gcc CXX=g++ CXXFLAGS=-std=c++11 --enable-verbosebuild --with-boost=/usr/include/boost
 cd build/$MRNET_ARCH/
 make
 make examples
