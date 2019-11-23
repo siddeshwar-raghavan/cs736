@@ -3,6 +3,8 @@
  *                  Detailed MRNet usage rights in "LICENSE" file.          *
  ****************************************************************************/
 
+#include <unordered_map>
+
 #include "mrnet/MRNet.h"
 #include "WordCount.h"
 
@@ -12,12 +14,12 @@ int main(int argc, char **argv)
 {
     Stream * stream = NULL;
     PacketPtr p;
-    int rc, tag=0, recv_val=0, num_iters=0;
+    int rc, tag=0, send_val = 100;
+    char* recv_val = NULL;
 
     Network * net = Network::CreateNetworkBE( argc, argv );
 
     do {
-
         rc = net->recv(&tag, p, &stream);
         if( rc == -1 ) {
             fprintf( stderr, "BE: Network::recv() failure\n" );
@@ -28,26 +30,36 @@ int main(int argc, char **argv)
             continue;
         }
 
+        std::unordered_map<std::string, int> m = {{"one", 1}, {"two", 2}, {"three", 3}};
+        std::string send_str("");
+
         switch(tag) {
 
         case PROT_SUM:
-            p->unpack( "%d %d", &recv_val, &num_iters );
+            // fprintf(stdout, "BE: count the word %s to be %d", recv_val, send_val);
+            fprintf(stdout, "BE: receive the empty packet.\n");
 
-            // Send num_iters waves of integers
-            for( int i=0; i<num_iters; i++ ) {
-                fprintf( stdout, "BE: Sending wave %u ...\n", i );
-                if( stream->send(tag, "%d", recv_val*i) == -1 ) {
-                    fprintf( stderr, "BE: stream::send(%%d) failure in PROT_SUM\n" );
-                    tag = PROT_EXIT;
-                    break;
-                }
-                if( stream->flush() == -1 ) {
-                    fprintf( stderr, "BE: stream::flush() failure in PROT_SUM\n" );
-                    break;
-                }
-                fflush(stdout);
-                sleep(2); // stagger sends
+            for (std::unordered_map<std::string, int>::iterator it = m.begin(); it != m.end(); it++) {
+                send_str.append(it->first);
+                send_str.append("#");
+                send_str.append(std::to_string(it->second));
+                send_str.append("#");
             }
+
+            if( stream->send(tag, "%s", send_str.c_str()) == -1 ) {
+                fprintf( stderr, "BE: stream::send(%%d) failure in PROT_SUM\n" );
+                tag = PROT_EXIT;
+                break;
+            }
+
+            fprintf(stdout, "BE: send out key value pair.\n");
+
+            if( stream->flush() == -1 ) {
+                fprintf( stderr, "BE: stream::flush() failure in PROT_SUM\n" );
+                break;
+            }
+            fflush(stdout);
+            sleep(2); // stagger sends
             break;
 
         case PROT_EXIT:

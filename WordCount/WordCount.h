@@ -11,4 +11,4 @@
 typedef enum { PROT_EXIT=FirstApplicationTag,
                PROT_SUM } Protocol;
 
-#endif /* integer_addition_h */
+#endif /* word_count_h */

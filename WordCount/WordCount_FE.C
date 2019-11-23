@@ -18,7 +18,7 @@ void Failure_Callback( Event* evt, void* )
 
 int main(int argc, char **argv)
 {
-    int send_val=32, recv_val=0;
+    int recv_val=0;
     int tag, retval;
     PacketPtr p;
 
@@ -67,7 +67,8 @@ int main(int argc, char **argv)
         }
 
         // Make sure path to "so_file" is in LD_LIBRARY_PATH
-        int filter_id = net->load_FilterFunc( so_file, "IntegerAdd" );
+        fprintf(stdout, "Trying to load the filter...\n");
+        int filter_id = net->load_FilterFunc( so_file, "WordCount" );
         if( filter_id == -1 ){
             fprintf( stderr, "Network::load_FilterFunc() failure\n" );
             delete net;
@@ -81,53 +82,46 @@ int main(int argc, char **argv)
         Stream * add_stream = net->new_Stream( comm_BC, filter_id,
                                                SFILTER_WAITFORALL );
 
-        int num_backends = int(comm_BC->get_EndPoints().size());
+        // int num_backends = int(comm_BC->get_EndPoints().size());
 
         // Broadcast a control message to back-ends to send us "num_iters"
         // waves of integers
         tag = PROT_SUM;
-        unsigned int num_iters=5;
-        if( add_stream->send( tag, "%d %d", send_val, num_iters ) == -1 ){
+
+        if( add_stream->send(tag, "") == -1 ){
             fprintf( stderr, "stream::send() failure\n" );
             return -1;
         }
+
+        fprintf(stdout, "FE: send out empty packet\n");
+
         if( add_stream->flush( ) == -1 ){
             fprintf( stderr, "stream::flush() failure\n" );
             return -1;
         }
 
         // We expect "num_iters" aggregated responses from all back-ends
-        for( unsigned int i=0; i < num_iters; i++ ){
 
-            retval = add_stream->recv(&tag, p);
-            if( retval == 0 ) {
-                //shouldn't be 0, either error or block for data, unless a failure occured
-                fprintf( stderr, "stream::recv() returned zero\n" );
-                if( saw_failure ) break;
-                return -1;
-            }
-            if( retval == -1 ) {
-                //recv error
-                fprintf( stderr, "stream::recv() unexpected failure\n" );
-                if( saw_failure ) break;
-                return -1;
-            }
-
-            if( p->unpack( "%d", &recv_val ) == -1 ){
-                fprintf( stderr, "stream::unpack() failure\n" );
-                return -1;
-            }
-
-            int expected_val = num_backends * i * send_val;
-            if( recv_val != expected_val ){
-                fprintf(stderr, "FE: Iteration %d: Failure! recv_val(%d) != %d*%d*%d=%d (send_val*i*num_backends)\n",
-                        i, recv_val, send_val, i, num_backends, expected_val );
-            }
-            else{
-                fprintf(stdout, "FE: Iteration %d: Success! recv_val(%d) == %d*%d*%d=%d (send_val*i*num_backends)\n",
-                        i, recv_val, send_val, i, num_backends, expected_val );
-            }
+        retval = add_stream->recv(&tag, p);
+        if( retval == 0 ) {
+            //shouldn't be 0, either error or block for data, unless a failure occured
+            fprintf( stderr, "stream::recv() returned zero\n" );
+            if( saw_failure ) break;
+            return -1;
         }
+        if( retval == -1 ) {
+            //recv error
+            fprintf( stderr, "stream::recv() unexpected failure\n" );
+            if( saw_failure ) break;
+            return -1;
+        }
+        char * send_val = NULL;
+        if( p->unpack( "%s", &send_val) == -1 ){
+            fprintf( stderr, "stream::unpack() failure\n" );
+            return -1;
+        }
+
+        fprintf(stdout, "FE: Sucess! receive %s\n", send_val);
 
         if( saw_failure ) {
             fprintf( stderr, "FE: a network process has failed, killing network\n" );
