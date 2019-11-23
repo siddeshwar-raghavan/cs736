@@ -27,13 +27,10 @@ Hint: Check `INSTALL` for detailed configuration.
 
 ### Run Example Applications
 
-Make a temporary folder under project root directory (e.g., `temp/`).
-
-Put the local topology file to `temp/`.
+Go to `Examples/WordCount`, run
 
 ```
-cd temp/
-WordCount_FE local-1x2.top WordCount_BE ../build/x86_64-pc-linux-gnu/lib/WordCountFilter.so > WordCount.out 2> WordCount.log
+WordCount_FE local.top WordCount_BE ../../build/x86_64-pc-linux-gnu/lib/WordCountFilter.so > WordCount.out 2> WordCount.log
 ```
 
 Check `WordCount.out` to see if the MRNet successfully run or failed.
