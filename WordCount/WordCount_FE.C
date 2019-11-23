@@ -116,7 +116,8 @@ int main(int argc, char **argv)
             return -1;
         }
 
-        char *send_val = "h";
+        //TODO: this is a strange thing.
+        char *send_val = "";
         if( p->unpack( "%s", &send_val) == -1 ){
             fprintf( stderr, "stream::unpack() failure\n" );
             return -1;
