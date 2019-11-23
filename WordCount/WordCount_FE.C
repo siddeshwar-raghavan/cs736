@@ -115,7 +115,8 @@ int main(int argc, char **argv)
             if( saw_failure ) break;
             return -1;
         }
-        char * send_val = NULL;
+
+        char *send_val = "h";
         if( p->unpack( "%s", &send_val) == -1 ){
             fprintf( stderr, "stream::unpack() failure\n" );
             return -1;
@@ -156,7 +157,6 @@ int main(int argc, char **argv)
 
         sleep(5);
     }
-
 
     return 0;
 }

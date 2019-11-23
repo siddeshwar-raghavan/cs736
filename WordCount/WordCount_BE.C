@@ -4,11 +4,46 @@
  ****************************************************************************/
 
 #include <unordered_map>
+#include <cctype>
+#include <fstream>
 
 #include "mrnet/MRNet.h"
 #include "WordCount.h"
 
 using namespace MRN;
+
+std::unordered_map<std::string, int> wordCountFile(const char* file_path) {
+    std::unordered_map<std::string, int> m;
+
+    // filestream variable file
+    std::ifstream file;
+    std::string word;
+
+    // opening file
+    file.open(file_path);
+
+    // extracting words from the file
+    while (file >> word)
+    {
+        // displaying content
+        int start_index = 0, end_index = (int)word.size() - 1;
+        while (ispunct(word[start_index])) {
+            start_index++;
+        }
+        while (ispunct(word[end_index])) {
+            end_index--;
+        }
+        word = word.substr(start_index, end_index - start_index + 1);
+        std::transform(word.begin(), word.end(), word.begin(), ::tolower);
+        if (m.count(word)) {
+            m[word]++;
+        } else {
+            m[word] = 1;
+        }
+    }
+    file.close();
+    return m;
+}
 
 int main(int argc, char **argv)
 {
@@ -16,8 +51,11 @@ int main(int argc, char **argv)
     PacketPtr p;
     int rc, tag=0, send_val = 100;
     char* recv_val = NULL;
+    char buffer[100];
+    const char* file_path_pattern = "/home/mazijun/Documents/readings/CS736/mrnet-3093918/Examples/WordCount/test-%d.txt";
 
     Network * net = Network::CreateNetworkBE( argc, argv );
+    sprintf(buffer, file_path_pattern, net->get_LocalRank());
 
     do {
         rc = net->recv(&tag, p, &stream);
@@ -30,7 +68,7 @@ int main(int argc, char **argv)
             continue;
         }
 
-        std::unordered_map<std::string, int> m = {{"one", 1}, {"two", 2}, {"three", 3}};
+        std::unordered_map<std::string, int> m = wordCountFile(buffer);
         std::string send_str("");
 
         switch(tag) {
