@@ -6,6 +6,8 @@
 #include "mrnet/MRNet.h"
 #include "WordCount.h"
 
+#include <time.h>
+
 using namespace MRN;
 
 bool saw_failure = false;
@@ -30,6 +32,10 @@ int main(int argc, char **argv)
     const char * backend_exe = argv[2];
     const char * so_file = argv[3];
     const char * dummy_argv=NULL;
+
+
+    struct timespec start, end;
+    long int delta_t = 0;
 
     int nets = 1;
     if( argc == 5 )
@@ -88,6 +94,8 @@ int main(int argc, char **argv)
         // waves of integers
         tag = PROT_SUM;
 
+        clock_gettime(CLOCK_REALTIME, &start);
+
         if( add_stream->send(tag, "") == -1 ){
             fprintf( stderr, "stream::send() failure\n" );
             return -1;
@@ -103,6 +111,8 @@ int main(int argc, char **argv)
         // We expect "num_iters" aggregated responses from all back-ends
 
         retval = add_stream->recv(&tag, p);
+        clock_gettime(CLOCK_REALTIME, &end);
+        delta_t = (end.tv_sec - start.tv_sec) * 1e9 + (end.tv_nsec - start.tv_nsec);
         if( retval == 0 ) {
             //shouldn't be 0, either error or block for data, unless a failure occured
             fprintf( stderr, "stream::recv() returned zero\n" );
@@ -116,14 +126,14 @@ int main(int argc, char **argv)
             return -1;
         }
 
-        //TODO: this is a strange thing.
+        //TODO: this is a strange thing: send_val can not initialized to be NULL.
         char *send_val = "";
         if( p->unpack( "%s", &send_val) == -1 ){
             fprintf( stderr, "stream::unpack() failure\n" );
             return -1;
         }
 
-        fprintf(stdout, "FE: Sucess! receive %s\n", send_val);
+        fprintf(stdout, "FE: Sucess! receive %s, using %ld nanoseconds\n", send_val, delta_t);
 
         if( saw_failure ) {
             fprintf( stderr, "FE: a network process has failed, killing network\n" );
