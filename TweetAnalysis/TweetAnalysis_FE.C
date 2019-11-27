@@ -20,12 +20,13 @@ void Failure_Callback( Event* evt, void* )
 
 int main(int argc, char **argv)
 {
-    int recv_val=0;
+    int send_val=32, recv_val=0;
     int tag, retval;
     PacketPtr p;
 
-    if( (argc != 4) && (argc != 5) ){
-        fprintf(stderr, "Usage: %s <topology file> <backend_exe> <so_file> [<num net instances>]\n", argv[0]);
+    if( argc != 4 ) {
+        fprintf(stderr,
+                "Usage: %s <topology file> <backend_exe> <so_file>\n", argv[0]);
         exit(-1);
     }
     const char * topology_file = argv[1];
@@ -34,139 +35,176 @@ int main(int argc, char **argv)
     const char * dummy_argv=NULL;
 
 
-    struct timespec start, end;
-    long int delta_t = 0;
+    // This Network() cnstr instantiates the MRNet internal nodes, according to
+    // the organization in "topology_file," and the application back-end with
+    // any specified cmd line args
+    Network * net = Network::CreateNetworkFE( topology_file,
+                                              backend_exe, &dummy_argv );
+    if( net->has_Error() ) {
+        net->perror("[1] Network creation failed");
+        exit(-1);
+    }
 
-    int nets = 1;
-    if( argc == 5 )
-        nets = atoi( argv[4] );
+    if( ! net->set_FailureRecovery(false) ) {
+        fprintf( stdout, "Failed to disable failure recovery\n" );
+        delete net;
+        return -1;
+    }
+    bool cbrett = net->register_EventCallback( Event::TOPOLOGY_EVENT,
+                                               TopologyEvent::TOPOL_REMOVE_NODE,
+                                               Failure_Callback, NULL );
+    if( cbrett == false ) {
+        fprintf( stdout, "Failed to register callback for node failure topology event\n" );
+        delete net;
+        return -1;
+    }
 
-    int n = 0;
-    while( n++ < nets ) {
+    Network * net2 = Network::CreateNetworkFE( topology_file,
+                                               backend_exe, &dummy_argv );
+    if( net2->has_Error() ) {
+        net2->perror("[2] Network creation failed");
+        exit(-1);
+    }
 
-        saw_failure = false;
+    if( ! net2->set_FailureRecovery(false) ) {
+        fprintf( stdout, "Failed to disable failure recovery\n" );
+        delete net2;
+        return -1;
+    }
+    bool cbrett2 = net2->register_EventCallback( Event::TOPOLOGY_EVENT,
+                                               TopologyEvent::TOPOL_REMOVE_NODE,
+                                               Failure_Callback, NULL );
+    if( cbrett2 == false ) {
+        fprintf( stdout, "Failed to register callback for node failure topology event\n" );
+        delete net;
+        return -1;
+    }
 
-        if( nets > 1 )
-            fprintf(stdout, "\n\n---------- Network Instance %d ----------\n\n", n);
+    // Make sure path to "so_file" is in LD_LIBRARY_PATH
+    fprintf(stdout, "Trying to load the filter...\n");
+    int filter_id = net->load_FilterFunc( so_file, "TweetAnalysis" );
+    if( filter_id == -1 ) {
+        fprintf( stderr, "[1] Network::load_FilterFunc() failure\n");
+        delete net;
+        delete net2;
+        return -1;
+    }
+    fprintf(stdout, "Trying to load the filter...\n");
+    int filter_id2 = net2->load_FilterFunc( so_file, "TweetAnalysis" );
+    if( filter_id2 == -1 ) {
+        fprintf( stderr, "[2] Network::load_FilterFunc() failure\n");
+        delete net;
+        delete net2;
+        return -1;
+    }
 
-        // This Network() cnstr instantiates the MRNet internal nodes, according to the
-        // organization in "topology_file," and the application back-end with any
-        // specified cmd line args
-        Network * net = Network::CreateNetworkFE( topology_file, backend_exe, &dummy_argv );
-        if( net->has_Error() ) {
-            net->perror("Network creation failed");
-            exit(-1);
-        }
 
-        if( ! net->set_FailureRecovery(false) ) {
-            fprintf( stdout, "Failed to disable failure recovery\n" );
-            delete net;
-            return -1;
-        }
-        bool cbrett = net->register_EventCallback( Event::TOPOLOGY_EVENT,
-                                                   TopologyEvent::TOPOL_REMOVE_NODE,
-                                                   Failure_Callback, NULL );
-        if( cbrett == false ) {
-            fprintf( stdout, "Failed to register callback for node failure topology event\n" );
-            delete net;
-            return -1;
-        }
+    // A Broadcast communicator contains all the back-ends
+    Communicator * comm_BC = net->get_BroadcastCommunicator();
+    Communicator * comm_BC2 = net2->get_BroadcastCommunicator();
 
-        // Make sure path to "so_file" is in LD_LIBRARY_PATH
-        fprintf(stdout, "Trying to load the filter...\n");
-        int filter_id = net->load_FilterFunc( so_file, "TweetAnalysis" );
-        if( filter_id == -1 ){
-            fprintf( stderr, "Network::load_FilterFunc() failure\n" );
-            delete net;
-            return -1;
-        }
+    // Create a stream that will use the Integer_Add filter for aggregation
+    Stream * add_stream = net->new_Stream( comm_BC, filter_id,
+                                           SFILTER_WAITFORALL );
+    Stream * add_stream2 = net2->new_Stream( comm_BC2, filter_id2,
+                                             SFILTER_WAITFORALL );
 
-        // A Broadcast communicator contains all the back-ends
-        Communicator * comm_BC = net->get_BroadcastCommunicator( );
+    int num_backends = int(comm_BC->get_EndPoints().size());
 
-        // Create a stream that will use the Integer_Add filter for aggregation
-        Stream * add_stream = net->new_Stream( comm_BC, filter_id,
-                                               SFILTER_WAITFORALL );
+    // Broadcast a control message to back-ends to send us "num_iters"
+    // waves of integers
+    tag = PROT_SUM;
+    unsigned int num_iters=5;
+    if( add_stream->send(tag, "%s", "Atlanta") == -1 ) {
+        fprintf( stderr, "[1] stream::send() failure\n");
+        return -1;
+    }
+    if( add_stream->flush() == -1 ) {
+        fprintf( stderr, "[1] stream::flush() failure\n");
+        return -1;
+    }
 
-        // int num_backends = int(comm_BC->get_EndPoints().size());
+    if( add_stream2->send(tag, "%s", "Bangalore") == -1 ) {
+        fprintf( stderr, "[2] stream::send() failure\n");
+        return -1;
+    }
+    if( add_stream2->flush() == -1 ) {
+        fprintf( stderr, "[2] stream::flush() failure\n");
+        return -1;
+    }
 
-        // Broadcast a control message to back-ends to send us "num_iters"
-        // waves of integers
-        tag = PROT_SUM;
+    retval = add_stream->recv(&tag, p);
 
-        clock_gettime(CLOCK_REALTIME, &start);
+    if( retval == -1) {
+        //recv error
+        fprintf( stderr, "stream::recv() failure\n");
+        return -1;
+    }
 
-        if( add_stream->send(tag, "") == -1 ){
-            fprintf( stderr, "stream::send() failure\n" );
-            return -1;
-        }
+    if( p->unpack("%d", &recv_val) == -1 ) {
+        fprintf( stderr, "stream::unpack() failure\n");
+        return -1;
+    }
+    fprintf(stdout, "[1] stream: Success! Atlanta appears in %d tweets\n", recv_val);
 
-        fprintf(stdout, "FE: send out empty packet\n");
+    retval = add_stream2->recv(&tag, p);
 
-        if( add_stream->flush( ) == -1 ){
-            fprintf( stderr, "stream::flush() failure\n" );
-            return -1;
-        }
+    if( retval == -1 ) {
+        //recv error
+        fprintf( stderr, "stream::recv() failure\n");
+        return -1;
+    }
 
-        // We expect "num_iters" aggregated responses from all back-ends
+    if( p->unpack("%d", &recv_val) == -1 ) {
+        fprintf( stderr, "stream::unpack() failure\n");
+        return -1;
+    }
+    fprintf(stdout, "[2] stream: Success! Bangalore appears in %d tweets\n", recv_val);
 
-        retval = add_stream->recv(&tag, p);
-        clock_gettime(CLOCK_REALTIME, &end);
-        delta_t = (end.tv_sec - start.tv_sec) * 1e9 + (end.tv_nsec - start.tv_nsec);
-        if( retval == 0 ) {
-            //shouldn't be 0, either error or block for data, unless a failure occured
-            fprintf( stderr, "stream::recv() returned zero\n" );
-            if( saw_failure ) break;
-            return -1;
-        }
-        if( retval == -1 ) {
-            //recv error
-            fprintf( stderr, "stream::recv() unexpected failure\n" );
-            if( saw_failure ) break;
-            return -1;
-        }
+    delete add_stream;
+    delete add_stream2;
 
-        //TODO: this is a strange thing: send_val can not initialized to be NULL.
-        char *send_val = "";
-        if( p->unpack( "%s", &send_val) == -1 ){
-            fprintf( stderr, "stream::unpack() failure\n" );
-            return -1;
-        }
+    // Tell back-ends to exit
+    Stream * ctl_stream = net->new_Stream( comm_BC, TFILTER_MAX,
+                                           SFILTER_WAITFORALL );
+    if( ctl_stream->send(PROT_EXIT, NULL) == -1 ) {
+        fprintf( stderr, "[1] stream::send(exit) failure\n");
+        return -1;
+    }
+    if( ctl_stream->flush() == -1 ) {
+        fprintf( stderr, "[1] stream::flush() failure\n");
+        return -1;
+    }
+    retval = ctl_stream->recv( &tag, p );
+    if( retval == -1 ) {
+        //recv error
+        fprintf( stderr, "[1] stream::recv() failure\n");
+        return -1;
+    }
+    delete ctl_stream;
 
-        fprintf(stdout, "FE: Sucess! receive %s, using %ld nanoseconds\n", send_val, delta_t);
+    Stream * ctl_stream2 = net2->new_Stream( comm_BC2, TFILTER_MAX,
+                                             SFILTER_WAITFORALL );
+    if( ctl_stream2->send(PROT_EXIT, NULL) == -1 ) {
+        fprintf( stderr, "[2] stream::send(exit) failure\n");
+        return -1;
+    }
+    if( ctl_stream2->flush() == -1 )  {
+        fprintf( stderr, "[2] stream::flush() failure\n");
+        return -1;
+    }
+    retval = ctl_stream2->recv( &tag, p );
+    if( retval == -1 ) {
+        //recv error
+        fprintf( stderr, "[2] stream::recv() failure\n");
+        return -1;
+    }
+    delete ctl_stream2;
 
-        if( saw_failure ) {
-            fprintf( stderr, "FE: a network process has failed, killing network\n" );
-            delete net;
-        }
-        else {
-            delete add_stream;
-
-            // Tell back-ends to exit
-            Stream * ctl_stream = net->new_Stream( comm_BC, TFILTER_MAX,
-                                                   SFILTER_WAITFORALL );
-            if(ctl_stream->send(PROT_EXIT, "") == -1){
-                fprintf( stderr, "stream::send(exit) failure\n" );
-                return -1;
-            }
-            if(ctl_stream->flush() == -1){
-                fprintf( stderr, "stream::flush() failure\n" );
-                return -1;
-            }
-            retval = ctl_stream->recv(&tag, p);
-            if( retval == -1){
-                //recv error
-                fprintf( stderr, "stream::recv() failure\n" );
-                return -1;
-            }
-            delete ctl_stream;
-            if( tag == PROT_EXIT ) {
-                // The Network destructor will cause all internal and leaf tree nodes to exit
-                delete net;
-            }
-        }
-
-        sleep(5);
+    if( tag == PROT_EXIT ) {
+        // The Network destructor will cause all internal and leaf tree nodes to exit
+        delete net;
+        delete net2;
     }
 
     return 0;
