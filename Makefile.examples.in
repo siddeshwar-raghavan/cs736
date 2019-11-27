@@ -126,7 +126,7 @@ export
 
 @VERBOSEMAKE@
 
-TARGETS = backend-attach integer-add word-count perf-data hetero-filter fault-recovery per-thread-streams
+TARGETS = backend-attach integer-add word-count tweet-analysis perf-data hetero-filter fault-recovery per-thread-streams
 
 default: all
 
@@ -134,6 +134,7 @@ EX_DIR = $(MRNET_ROOT)/Examples
 BA_DIR = $(EX_DIR)/NoBackEndInstantiation
 IA_DIR = $(EX_DIR)/IntegerAddition
 WC_DIR = $(EX_DIR)/WordCount
+WC_DIR = $(EX_DIR)/TweetAnalysis
 HF_DIR = $(EX_DIR)/HeterogeneousFilters
 PD_DIR = $(EX_DIR)/PerformanceData
 FR_DIR = $(EX_DIR)/FaultRecovery
@@ -143,6 +144,7 @@ PTS_DIR = $(EX_DIR)/PerThreadStreams
         backend-attach backend-attach-clean backend-attach-install \
         integer-add integer-add-clean integer-add-install \
         word-count word-count-clean word-count-install \
+        tweet-analysis tweet-analysis-clean tweet-analysis-install \
         hetero-filter hetero-filter-clean hetero-filter-install \
         perf-data perf-data-clean perf-data-install \
         fault-recovery fault-recovery-clean fault-recovery-install \
@@ -191,6 +193,19 @@ word-count-clean:
 
 word-count-install:
 	@echo Installing Word Count Example
+	$(MAKE) -C $(WC_DIR) install
+
+# Tweet Analysis Example
+tweet-analysis:
+	@echo Building Tweet Analysis Example
+	$(MAKE) -C $(WC_DIR)
+
+tweet-analysis-clean:
+	@echo Cleaning Tweet Analysis Example
+	$(MAKE) -C $(WC_DIR) clean
+
+tweet-analysis-install:
+	@echo Installing Tweet Analysis Example
 	$(MAKE) -C $(WC_DIR) install
 
 # Heterogeneous Filters Example
@@ -246,9 +261,9 @@ per-thread-streams-install:
 	$(MAKE) -C $(PTS_DIR) install
 
 # Clean rules
-clean: backend-attach-clean integer-add-clean word-count-clean hetero-filter-clean \
+clean: backend-attach-clean integer-add-clean word-count-clean tweet-analysis-clean hetero-filter-clean \
        perf-data-clean fault-recovery-clean per-thread-streams-clean
 
 # Install rules
-install: backend-attach-install integer-add-install word-count-install hetero-filter-install \
+install: backend-attach-install integer-add-install word-count-install tweet-analysis-install hetero-filter-install \
          perf-data-install fault-recovery-install per-thread-streams-install

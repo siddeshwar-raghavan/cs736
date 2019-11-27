@@ -3,12 +3,12 @@
  *                  Detailed MRNet usage rights in "LICENSE" file.          *
  ****************************************************************************/
 
-#if !defined(word_count_h )
-#define word_count_h 1
+#if !defined(tweet_analysis_h )
+#define tweet_analysis_h 1
 
 #include "mrnet/Types.h"
 
 typedef enum { PROT_EXIT=FirstApplicationTag,
                PROT_SUM } Protocol;
 
-#endif /* word_count_h */
+#endif /* tweet_analysis_h */

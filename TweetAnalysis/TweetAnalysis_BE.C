@@ -8,41 +8,30 @@
 #include <fstream>
 
 #include "mrnet/MRNet.h"
-#include "WordCount.h"
+#include "TweetAnalysis.h"
 
 using namespace MRN;
 
-std::unordered_map<std::string, int> wordCountFile(const char* file_path) {
-    std::unordered_map<std::string, int> m;
+int tweetCountFile(const char* file_path, const std::string target) {
+    int ans = 0;
 
     // filestream variable file
     std::ifstream file;
-    std::string word;
+    std::string line;
 
     // opening file
     file.open(file_path);
 
     // extracting words from the file
-    while (file >> word)
+    while (std::getline(file, line))
     {
-        // displaying content
-        int start_index = 0, end_index = (int)word.size() - 1;
-        while (ispunct(word[start_index])) {
-            start_index++;
-        }
-        while (ispunct(word[end_index])) {
-            end_index--;
-        }
-        word = word.substr(start_index, end_index - start_index + 1);
-        std::transform(word.begin(), word.end(), word.begin(), ::tolower);
-        if (m.count(word)) {
-            m[word]++;
-        } else {
-            m[word] = 1;
+        // check if line contains target
+        if (line.find(target) != std::string::npos) {
+            ans++;
         }
     }
     file.close();
-    return m;
+    return ans;
 }
 
 int main(int argc, char **argv)
@@ -52,7 +41,7 @@ int main(int argc, char **argv)
     int rc, tag=0, send_val = 100;
     char* recv_val = NULL;
     char buffer[100];
-    const char* file_path_pattern = "/home/mazijun/Documents/readings/CS736/mrnet-3093918/Examples/WordCount/test-%d.txt";
+    const char* file_path_pattern = "/home/mazijun/Documents/readings/CS736/mrnet-3093918/Examples/TweetAnalysis/test-%d.txt";
 
     Network * net = Network::CreateNetworkBE( argc, argv );
     sprintf(buffer, file_path_pattern, net->get_LocalRank());
@@ -68,29 +57,21 @@ int main(int argc, char **argv)
             continue;
         }
 
-        std::unordered_map<std::string, int> m = wordCountFile(buffer);
-        std::string send_str("");
+        int tweet_count = 0;
 
         switch(tag) {
 
         case PROT_SUM:
-            // fprintf(stdout, "BE: count the word %s to be %d", recv_val, send_val);
-            fprintf(stdout, "BE: receive the empty packet.\n");
+            p->unpack( "%s", &recv_val);
+            fprintf(stdout, "BE: receive word %s.\n", recv_val);
 
-            for (std::unordered_map<std::string, int>::iterator it = m.begin(); it != m.end(); it++) {
-                send_str.append(it->first);
-                send_str.append("#");
-                send_str.append(std::to_string(it->second));
-                send_str.append("#");
-            }
+            tweet_count = tweetCountFile(buffer, std::string(recv_val));
 
-            if( stream->send(tag, "%s", send_str.c_str()) == -1 ) {
+            if( stream->send(tag, "%d", tweet_count) == -1 ) {
                 fprintf( stderr, "BE: stream::send(%%d) failure in PROT_SUM\n" );
                 tag = PROT_EXIT;
                 break;
             }
-
-            fprintf(stdout, "BE: send out key value pair.\n");
 
             if( stream->flush() == -1 ) {
                 fprintf( stderr, "BE: stream::flush() failure in PROT_SUM\n" );
